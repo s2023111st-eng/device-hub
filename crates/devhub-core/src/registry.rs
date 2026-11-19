@@ -280,7 +280,8 @@ pub const KNOWN: &[KnownDevice] = &[
         name: "PRO X SUPERLIGHT",
         transport: Transport::Wireless24G,
         driver: DriverKind::Logitech,
-        verified: false,
+        // 実機検証済 (2026-11-19): 読み出し・ポーリング書き込み往復・読み戻し照合。
+        verified: true,
     },
     // PRO X SUPERLIGHT 有線 (充電ケーブル接続時)。
     KnownDevice {

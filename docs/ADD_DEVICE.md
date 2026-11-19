@@ -15,7 +15,7 @@
 | HTS Plus Pro (有線) | 33E4:5219 | FF02 / 02 | Mousefit → `mousefit8.rs` (report-8/EEPROM) | www.mouse.fit | **v2 実機検証済** (有線でも feature report は使えず report-8) |
 | HTX Ultra | 33E4:5608, 5617, 5618, 5619 | FF02 / 02 (推定) | Mousefit | www.mouse.fit | 機種表から登録 / 未検証 |
 | Logitech PRO X TKL RAPID | 046D:C35B | FF00 / 02 | Logitech → `logitech/tkl.rs` (HID++ 2.0) | (G HUB) | **実機検証済** (作動点/RT・ホスト側設定を常駐エージェントが送信) |
-| Logitech PRO X SUPERLIGHT | 受信機 046D:C547 / 有線 C094 | FF00 / 02 | Logitech → `logitech/superlight.rs` | (G HUB) | 実装済・実機未検証 (オンボードプロファイル形式 4) |
+| Logitech PRO X SUPERLIGHT | 受信機 046D:C547 / 有線 C094 | FF00 / 02 | Logitech → `logitech/superlight.rs` | (G HUB) | **実機検証済** (オンボードプロファイル形式 4・読み出し/書き込み往復/読み戻し照合) |
 | ATK F1 Ultimate | 未確定 | 未確定 | 未確定 | (mouse.fit の機種表に無い) | §7 を参照 |
 
 **接続方式でプロトコルが変わる点に注意**: mouse.fit の新プロトコル (64B feature report) は

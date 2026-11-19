@@ -82,6 +82,11 @@ OpenMouse-Project/mouse-protocol の `docs/logitech-onboard-profiles.md`。
 - 書く前に全セクタ (0x0000, 0x0001–5, 0x0101–5) を `%APPDATA%\DeviceHub\logitech\backup\` へ保存。
 - ROM プロファイル (0x01xx) 使用中なら同番号のフラッシュ側へ複製し、ディレクトリ (0x0000) に登録。
 - 書き込み後は読み戻して照合し、`setOnboardMode(1)` + `setCurrentProfile` で読み込ませる。
-- **実機未検証** (解析時マウスが電源オフ)。`registry` の `verified: false`。
+- 実機検証済 (2026-11-19, FW MPM25 2.23): getInfo `01 04 01 05 01 05 10 00 ff` = 形式 4・5 プロファイル・
+  5 ボタン・16 セクタ・セクタ長 255。ディレクトリ `00 01 01 ff | 00 02 00 ff | …`、フラッシュの
+  プロファイル 1 (0x0001) が使用中。ポーリング 1000→500→1000Hz の書き込み往復を読み戻しで照合
+  (`examples/logie2e.rs`)。ROM 側 (0x0101) は CRC が一致しない (別形式) ので読み込みに使わない。
+- 無線の応答は普段 ~27ms だが、しばらく触らないと初回だけ ~1.25s (リンク復帰)。
+  タイムアウトはこれより長く (1.6s) 取る。
 
 G HUB のアプリ別プロファイル (自動切替) は移行しない — Device HUB の「プロセス連動」で再現する。

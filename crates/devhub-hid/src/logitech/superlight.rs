@@ -39,6 +39,8 @@ const DPI_MAX: u32 = 25600;
 const STAGES: usize = 5;
 const BUTTONS: usize = 5;
 const RATES: [u32; 4] = [125, 250, 500, 1000];
+/// 無線の応答待ち上限 (ms)。リンク復帰の初回応答 ~1.25s を待てる長さ。
+const WAKE_MS: u64 = 1600;
 
 type Events = Option<Arc<dyn Fn(HubEvent) + Send + Sync>>;
 
@@ -61,16 +63,18 @@ pub struct Superlight {
 
 pub fn open(dev: hidapi::HidDevice, info: DeviceInfo, events: Events) -> HubResult<Superlight> {
     let wireless = info.transport == Transport::Wireless24G;
+    // 無線は普段 ~27ms で応答するが、しばらく触らずにいると最初の 1 回だけ
+    // リンク復帰で ~1.25s かかる (実機計測)。それより短いと休眠と誤判定する。
     let h = Hidpp::new(
         dev,
         if wireless { 1 } else { 0xFF },
-        Duration::from_millis(if wireless { 600 } else { 800 }),
+        Duration::from_millis(if wireless { WAKE_MS } else { 800 }),
     );
-    if wireless {
-        // ペアリングスロットを探す (既定 1)。全部黙っていれば休眠中。
-        let found = (1..=6u8).find(|&i| {
+    if wireless && h.ping(Duration::from_millis(WAKE_MS)).is_none() {
+        // スロット 1 が黙っていれば他のペアリングスロットを探す (既定 1)。
+        let found = (2..=6u8).find(|&i| {
             h.set_index(i);
-            h.ping(Duration::from_millis(250)).is_some()
+            h.ping(Duration::from_millis(300)).is_some()
         });
         h.set_index(found.unwrap_or(1));
     }
@@ -174,7 +178,7 @@ impl Superlight {
     }
 
     fn refresh_info(&self) {
-        let alive = self.h.ping(Duration::from_millis(300)).is_some();
+        let alive = self.h.ping(Duration::from_millis(WAKE_MS)).is_some();
         let mut i = self.info.lock().unwrap_or_else(|p| p.into_inner());
         i.supported = true;
         i.asleep = !alive && i.transport == Transport::Wireless24G;
