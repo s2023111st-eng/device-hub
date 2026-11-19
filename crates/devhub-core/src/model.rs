@@ -72,6 +72,8 @@ pub enum DriverKind {
     Atk,
     /// www.lamzu.net / Aurora 系 (64B feature report、if2 FFFF:00)。
     Lamzu,
+    /// Logitech G (G HUB 互換、HID++ 2.0。vendor FF00 / long report usage 2)。
+    Logitech,
     /// 未割り当て (検出だけできる)。
     Unsupported,
 }

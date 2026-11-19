@@ -265,6 +265,52 @@ pub const KNOWN: &[KnownDevice] = &[
         driver: DriverKind::Lamzu,
         verified: false,
     },
+    // ---------------------------------------------------------------- Logitech G (HID++ 2.0)
+    // 設定は vendor FF00 の long report コレクション (usage 2, report 0x11)。
+    // PRO X SUPERLIGHT — LIGHTSPEED 受信機 c547 (WPID 0x4093)。受信機の製品名は
+    // "USB Receiver" なので表示名はペア機種名で出す。オンボードプロファイル形式 4。
+    KnownDevice {
+        vid: 0x046D,
+        pid: 0xC547,
+        usage_page: Some(0xFF00),
+        usage: Some(0x02),
+        kind: DeviceKind::Mouse,
+        vendor: "Logitech",
+        model: "pro-x-superlight",
+        name: "PRO X SUPERLIGHT",
+        transport: Transport::Wireless24G,
+        driver: DriverKind::Logitech,
+        verified: false,
+    },
+    // PRO X SUPERLIGHT 有線 (充電ケーブル接続時)。
+    KnownDevice {
+        vid: 0x046D,
+        pid: 0xC094,
+        usage_page: Some(0xFF00),
+        usage: Some(0x02),
+        kind: DeviceKind::Mouse,
+        vendor: "Logitech",
+        model: "pro-x-superlight",
+        name: "PRO X SUPERLIGHT",
+        transport: Transport::Wired,
+        driver: DriverKind::Logitech,
+        verified: false,
+    },
+    // PRO X TKL RAPID — 実機列挙 046d:c35b if2 FF00/02。HID++ 4.2、FW U170 170.4.20。
+    // 作動点/RT は 0x8101 経由のホスト側設定 (G HUB の lghub_agent 送信を記録して確定)。
+    KnownDevice {
+        vid: 0x046D,
+        pid: 0xC35B,
+        usage_page: Some(0xFF00),
+        usage: Some(0x02),
+        kind: DeviceKind::Keyboard,
+        vendor: "Logitech",
+        model: "pro-x-tkl-rapid",
+        name: "PRO X TKL RAPID",
+        transport: Transport::Wired,
+        driver: DriverKind::Logitech,
+        verified: true,
+    },
 ];
 
 /// 列挙結果 (VID/PID/usage) に合う既知デバイス。`0xFFFF` のプレースホルダは一致しない。

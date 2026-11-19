@@ -22,6 +22,11 @@ use gpui_kit::component::{Theme, ThemeMode, TitleBar};
 use gpui_kit::*;
 
 fn main() {
+    // 常駐エージェント (窓なし): ホスト側設定のデバイスへ設定を押し込み続ける。
+    if std::env::args().any(|a| a == "--agent") {
+        device_hub::agent::run();
+        return;
+    }
     device_hub::rawinput::start(); // 実測ポーリングレート計測 (Raw Input)
     // USB 計測ワーカーの診断ログ — 未設定なら %TEMP% に既定で出す
     // (切断の OS コード採取用。ワーカー遷移のみで容量は微小)。

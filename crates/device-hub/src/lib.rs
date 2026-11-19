@@ -9,6 +9,7 @@
 //! - `store` … バックエンド (devhub-core 契約) との橋。デバイスごとのワーカースレッド
 //! - `theme` / `wallpaper` / `prefs` / `keycode`
 
+pub mod agent;
 pub mod app;
 pub mod atomic;
 pub mod audio;

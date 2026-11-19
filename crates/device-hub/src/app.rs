@@ -122,7 +122,10 @@ pub fn tabs_for(caps: &Capabilities) -> Vec<Tab> {
         }
     }
     if let Some(k) = &caps.keyboard {
-        v.push(Tab::Keymap);
+        // キー割り当てを持たない機種 (層を宣言しない) はキーマップ画面を出さない。
+        if !k.layers.is_empty() {
+            v.push(Tab::Keymap);
+        }
         if k.perf.is_some() {
             v.push(Tab::Trigger);
         }

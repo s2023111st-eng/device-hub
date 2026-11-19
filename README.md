@@ -37,6 +37,8 @@ with a Liquid Glass design.
 | HTS Plus Pro (wired + 2.4GHz dongle) | All settings incl. Rapid Trigger |
 | SU66 Max (Keebforce/Everglide) | Keymap, per-key perf, lighting, macros, live travel |
 | TP55 USB DAC | Parametric EQ |
+| Logitech PRO X TKL RAPID | Per-key actuation point / rapid trigger (replaces G HUB, see `docs/LOGITECH_HIDPP.md`) |
+| Logitech PRO X SUPERLIGHT | DPI stages, polling rate, buttons via onboard profiles (not yet verified on hardware) |
 
 Other models using the same protocols (mouse.fit report-8/EEPROM, xsyd) are
 detected automatically by capability, not by device name.
@@ -54,6 +56,13 @@ DEVHUB_DEMO=1 cargo run -p device-hub  # demo mode, no device needed
 cargo clippy --workspace
 cargo test --workspace
 ```
+
+### Resident agent (G HUB replacement)
+
+Devices that only keep settings on the host side (Logitech PRO X TKL RAPID) need a
+process that re-sends them whenever the device appears or the PC resumes. Run
+`device-hub.exe --agent` (no window) for that; `scripts/install-agent.ps1` copies the
+exe to `%LOCALAPPDATA%\Programs\DeviceHub` and registers it to start at logon.
 
 `device-hub.exe` is a single portable binary — fonts and the icon are embedded;
 settings live in `%APPDATA%\DeviceHub\`.
@@ -136,8 +145,11 @@ UI は GPUI + Liquid Glass デザイン。
 
 ### 動作確認デバイス
 
-HTS Plus Pro (有線+ドングル) · SU66 Max · TP55 USB DAC
+HTS Plus Pro (有線+ドングル) · SU66 Max · TP55 USB DAC ·
+Logitech PRO X TKL RAPID (作動点/RT, G HUB 不要) · PRO X SUPERLIGHT (オンボード, 実機未検証)
 (同プロトコルの他機種も caps ベースで自動検出)
+
+常駐エージェント: `device-hub.exe --agent` (窓なし)。`scripts/install-agent.ps1` でログオン時に自動起動。
 
 ### ビルド
 

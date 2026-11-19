@@ -19,6 +19,7 @@ docs/LIVE_LIGHTING.md   ライブライティング (DirectDrive) とキーボ�
 docs/AUDIO_FRONTEND.md  USB DAC (TP55 / WalkPlay) の EQ 画面と契約の使い方
 docs/BACKEND_BRIEF.md   Web HUB 完全移植の機能表 (v3)
 docs/ADD_DEVICE.md      新デバイス追加の手順 (別セッション/別エージェント向け)
+docs/LOGITECH_HIDPP.md  Logitech G (HID++ 2.0) の解析記録 (G HUB 置き換え)
 docs/PROTOCOL_NOTES.md  Web configurator の解析結果 (コマンド表・アドレス・機能一覧)
 docs/FRONTEND.md        フロントエンドの構造
 ```
@@ -64,6 +65,8 @@ cargo run --release -p device-hub        # 普段使いは release (起動・描
 DEVHUB_DEMO=1 cargo run -p device-hub    # 常にデモ
 DEVHUB_FAST=1 cargo run -p device-hub    # GPU ガラス無効
 cargo run -p devhub-hid --example enum   # HID 列挙
+cargo run -p devhub-hid --example logi   # Logitech (HID++) の読み出し確認
+device-hub.exe --agent                   # 常駐エージェント (窓なし、ホスト側設定の再送)
 cargo run -p devhub-obs --example preview # OBS 無しでオーバーレイ描画を PNG 確認
 cargo clippy --workspace
 ```
