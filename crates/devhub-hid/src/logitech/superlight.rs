@@ -341,16 +341,12 @@ impl Superlight {
     /// プロファイルを書き換えて保存し、本体に読み込ませる。
     fn edit(&self, f: impl FnOnce(&mut Vec<u8>) -> HubResult<()>) -> HubResult<()> {
         let o = self.onboard_info()?;
-        let (sector, mut data) = match self.profile.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+        // ロックは文の終わりで外す (match の対象式に置くと None 分岐の load_profile が
+        // 同じロックを取りに行ってデッドロックする)。
+        let cached = self.profile.lock().unwrap_or_else(|p| p.into_inner()).clone();
+        let (sector, mut data) = match cached {
             Some(p) => p,
-            None => {
-                drop(self.load_profile()?);
-                self.profile
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner())
-                    .clone()
-                    .ok_or(HubError::Protocol("プロファイル未読込".into()))?
-            }
+            None => self.load_profile()?,
         };
         self.ensure_backup()?;
         f(&mut data)?;
