@@ -61,7 +61,9 @@ cargo test --workspace
 
 Devices that only keep settings on the host side (Logitech PRO X TKL RAPID) need a
 process that re-sends them whenever the device appears or the PC resumes. Run
-`device-hub.exe --agent` (no window) for that; `scripts/install-agent.ps1` copies the
+`device-hub.exe --agent` (no window) for that. The agent also evaluates the per-app rules from the
+Automation page, so game-specific profiles switch even with the window closed.
+`scripts/install-agent.ps1` copies the
 exe to `%LOCALAPPDATA%\Programs\DeviceHub` and registers it to start at logon.
 
 `device-hub.exe` is a single portable binary — fonts and the icon are embedded;

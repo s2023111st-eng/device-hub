@@ -41,6 +41,10 @@ const BUTTONS: usize = 5;
 const RATES: [u32; 4] = [125, 250, 500, 1000];
 /// 無線の応答待ち上限 (ms)。リンク復帰の初回応答 ~1.25s を待てる長さ。
 const WAKE_MS: u64 = 1600;
+/// オンボードのプロファイル枠 (セクタ 0x0001–0x0005)。
+const PROFILES: usize = 5;
+const NAME_AT: usize = 0xA0;
+const NAME_LEN: usize = 0x30;
 
 type Events = Option<Arc<dyn Fn(HubEvent) + Send + Sync>>;
 
@@ -58,6 +62,7 @@ pub struct Superlight {
     onboard: Mutex<Option<OnboardInfo>>,
     /// 直近に読んだプロファイル (セクタ番号, 中身)。apply はこれを書き換えて保存する。
     profile: Mutex<Option<(u16, Vec<u8>)>>,
+    names: Mutex<Option<Vec<String>>>,
     backed_up: Mutex<bool>,
 }
 
@@ -85,6 +90,7 @@ pub fn open(dev: hidapi::HidDevice, info: DeviceInfo, events: Events) -> HubResu
         events,
         onboard: Mutex::new(None),
         profile: Mutex::new(None),
+        names: Mutex::new(None),
         backed_up: Mutex::new(false),
     };
     d.refresh_info();
@@ -94,6 +100,11 @@ pub fn open(dev: hidapi::HidDevice, info: DeviceInfo, events: Events) -> HubResu
 fn build_caps() -> Capabilities {
     let mut c = Capabilities::empty();
     c.battery = true;
+    // 本体の 5 枠。切替は揮発 (setCurrentProfile) なのでゲームごとの自動切替に使える。
+    c.profiles = Some(ProfileCaps {
+        count: PROFILES as u8,
+        renamable: true,
+    });
     c.mouse = Some(MouseCaps {
         dpi_min: DPI_MIN,
         dpi_max: DPI_MAX,
@@ -341,13 +352,7 @@ impl Superlight {
                     .ok_or(HubError::Protocol("プロファイル未読込".into()))?
             }
         };
-        {
-            let mut b = self.backed_up.lock().unwrap_or_else(|p| p.into_inner());
-            if !*b {
-                self.backup()?;
-                *b = true;
-            }
-        }
+        self.ensure_backup()?;
         f(&mut data)?;
         Self::seal(&mut data);
         // ROM プロファイル使用中なら同じ番号のフラッシュ側へ複製し、ディレクトリで有効化。
@@ -365,6 +370,136 @@ impl Superlight {
         *self.profile.lock().unwrap_or_else(|p| p.into_inner()) = Some((target, data));
         Ok(())
     }
+
+    fn ensure_backup(&self) -> HubResult<()> {
+        let mut b = self.backed_up.lock().unwrap_or_else(|p| p.into_inner());
+        if !*b {
+            self.backup()?;
+            *b = true;
+        }
+        Ok(())
+    }
+
+    /// 現在使っているフラッシュ側のプロファイル枠 (0 始まり)。ROM 使用中は 0。
+    fn active_slot(&self) -> HubResult<usize> {
+        let r = self.call(F_PROFILES, 4, &[])?;
+        let s = u16::from_be_bytes([r[0], r[1]]) & 0x00FF;
+        Ok((s as usize).clamp(1, PROFILES) - 1)
+    }
+
+    /// 枠の名前 (セクタ 0xA0 からの UTF-16LE)。一度読んだらキャッシュする。
+    fn profile_names(&self) -> Vec<String> {
+        if let Some(n) = self.names.lock().unwrap_or_else(|p| p.into_inner()).clone() {
+            return n;
+        }
+        let mut out = Vec::with_capacity(PROFILES);
+        for slot in 0..PROFILES {
+            let sector = slot as u16 + 1;
+            let mut raw = Vec::with_capacity(NAME_LEN);
+            for off in (NAME_AT..NAME_AT + NAME_LEN).step_by(16) {
+                match self.call(
+                    F_PROFILES,
+                    5,
+                    &[(sector >> 8) as u8, sector as u8, (off >> 8) as u8, off as u8],
+                ) {
+                    Ok(r) => raw.extend_from_slice(&r),
+                    Err(_) => return vec![String::new(); PROFILES],
+                }
+            }
+            out.push(decode_name(&raw));
+        }
+        *self.names.lock().unwrap_or_else(|p| p.into_inner()) = Some(out.clone());
+        out
+    }
+
+    /// 枠 `slot` に切り替える。setCurrentProfile は揮発 (フラッシュに書かない) なので
+    /// ゲームごとの切替に使える。枠の中身が壊れて (未使用で) いれば今の設定を複製してから。
+    fn switch_profile(&self, slot: usize) -> HubResult<()> {
+        if slot >= PROFILES {
+            return Err(HubError::Invalid("プロファイル番号が範囲外です".into()));
+        }
+        let o = self.onboard_info()?;
+        let sector = slot as u16 + 1;
+        let data = self.read_sector(sector, o.sector_size)?;
+        if !Self::crc_ok(&data) {
+            let (_, cur) = self.load_profile()?;
+            self.ensure_backup()?;
+            self.write_sector(sector, &cur)?;
+        }
+        let set = |s: u16| self.call(F_PROFILES, 3, &[(s >> 8) as u8, s as u8]);
+        if set(sector).is_err() {
+            // ディレクトリで無効な枠は選べない機種向け: 有効にしてから選び直す (初回だけ書く)。
+            let mut dir = self.read_sector(0x0000, o.sector_size)?;
+            let mut changed = false;
+            for e in dir[..o.sector_size - 2].chunks_mut(4) {
+                if e[0] == 0xFF && e[1] == 0xFF {
+                    break;
+                }
+                if u16::from_be_bytes([e[0], e[1]]) == sector && e[2] != 1 {
+                    e[2] = 1;
+                    changed = true;
+                }
+            }
+            if !changed {
+                return Err(HubError::Protocol(format!(
+                    "プロファイル {} を選べません",
+                    slot + 1
+                )));
+            }
+            self.ensure_backup()?;
+            Self::seal(&mut dir);
+            self.write_sector(0x0000, &dir)?;
+            set(sector)?;
+        }
+        *self.profile.lock().unwrap_or_else(|p| p.into_inner()) = None;
+        Ok(())
+    }
+
+    /// 枠 `slot` の名前を書き換える (その枠のセクタを 1 回書く)。
+    fn rename_profile(&self, slot: usize, name: &str) -> HubResult<()> {
+        if slot >= PROFILES {
+            return Err(HubError::Invalid("プロファイル番号が範囲外です".into()));
+        }
+        let o = self.onboard_info()?;
+        let sector = slot as u16 + 1;
+        let mut data = self.read_sector(sector, o.sector_size)?;
+        if !Self::crc_ok(&data) {
+            return Err(HubError::Protocol(
+                "未使用のプロファイルです — 先に切り替えて作成してください".into(),
+            ));
+        }
+        self.ensure_backup()?;
+        data[NAME_AT..NAME_AT + NAME_LEN].copy_from_slice(&encode_name(name));
+        Self::seal(&mut data);
+        self.write_sector(sector, &data)?;
+        if let Some(n) = self.names.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+            n[slot] = decode_name(&data[NAME_AT..NAME_AT + NAME_LEN]);
+        }
+        if let Some((s, d)) = self.profile.lock().unwrap_or_else(|p| p.into_inner()).as_mut() {
+            if *s == sector {
+                *d = data;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// プロファイル名 0x30B (UTF-16LE、最大 23 文字 + 終端)。未設定は 0xFF 埋め。
+pub fn decode_name(raw: &[u8]) -> String {
+    let units: Vec<u16> = raw
+        .chunks_exact(2)
+        .map(|c| u16::from_le_bytes([c[0], c[1]]))
+        .take_while(|u| *u != 0 && *u != 0xFFFF)
+        .collect();
+    String::from_utf16_lossy(&units)
+}
+
+pub fn encode_name(name: &str) -> [u8; NAME_LEN] {
+    let mut out = [0u8; NAME_LEN];
+    for (i, u) in name.encode_utf16().take(NAME_LEN / 2 - 1).enumerate() {
+        out[2 * i..2 * i + 2].copy_from_slice(&u.to_le_bytes());
+    }
+    out
 }
 
 // ---------------------------------------------------------------- ボタン符号
@@ -584,7 +719,10 @@ impl DeviceDriver for Superlight {
             .unwrap_or(1000);
         settings.insert("polling".into(), SettingValue::Choice(rate as i64));
         Ok(DeviceState {
-            profile: ProfileState::default(),
+            profile: ProfileState {
+                active: self.active_slot().unwrap_or(0) as u8,
+                names: self.profile_names(),
+            },
             settings,
             mouse: Some(mouse),
             keyboard: None,
@@ -638,6 +776,8 @@ impl DeviceDriver for Superlight {
                     Ok(())
                 })
             }
+            Change::Profile(i) => self.switch_profile(*i as usize),
+            Change::ProfileName { index, name } => self.rename_profile(*index as usize, name),
             Change::Setting { id, value } if id == "polling" => {
                 let hz = value.as_choice() as u32;
                 if !RATES.contains(&hz) {
@@ -721,6 +861,16 @@ mod tests {
         let (m2, _) = parse_profile(&b);
         assert_eq!(m2.stages.len(), 3);
         assert_eq!(m2.active_stage, 2);
+    }
+
+    #[test]
+    fn profile_name_codec() {
+        let n = encode_name("StarRail");
+        assert_eq!(&n[..4], &[b'S', 0, b't', 0]);
+        assert_eq!(decode_name(&n), "StarRail");
+        assert_eq!(decode_name(&[0xFF; NAME_LEN]), "");
+        let long: String = "あ".repeat(40);
+        assert_eq!(decode_name(&encode_name(&long)).chars().count(), 23);
     }
 
     #[test]

@@ -159,7 +159,7 @@ fn rule_matches(rule: &ProcRule, fg: &str) -> bool {
 }
 
 /// ルールの識別キー (index ではなく内容で持つ — 削除/並び替えに強い)。
-fn rule_key(rule: &ProcRule) -> String {
+pub(crate) fn rule_key(rule: &ProcRule) -> String {
     format!("{}|{}", rule.process.trim().to_lowercase(), rule.device)
 }
 
@@ -176,13 +176,13 @@ pub struct ProcApplied {
 /// 管理下のアプリ A から管理下の B へ直接切り替えたとき、A の復帰が
 /// B の適用を上書きしないようにするため。
 #[derive(Default)]
-struct ProcEval {
+pub(crate) struct ProcEval {
     /// 現在アクティブなキー → 次の離脱で使う記録。
-    now: std::collections::HashMap<String, ProcApplied>,
+    pub(crate) now: std::collections::HashMap<String, ProcApplied>,
     /// (デバイス, プロファイル名) — ルールの並び順に発火。
-    leaves: Vec<(String, String)>,
+    pub(crate) leaves: Vec<(String, String)>,
     /// (デバイス, on_fg プロファイル名の列) — ルールの並び順に発火。
-    enters: Vec<(String, Vec<String>)>,
+    pub(crate) enters: Vec<(String, Vec<String>)>,
 }
 
 /// ルール集合と前面 exe から今 tick の遷移を決める (純粋関数 — 副作用なし)。
@@ -190,7 +190,7 @@ struct ProcEval {
 /// キー (process|device) ごとに集約するので、同一 process+device のルールが
 /// 複数あっても 1 遷移として扱う。`states` は前回アクティブだったキーの記録で、
 /// ルールが削除・編集されて実体が無くなっても記録値で復帰できる。
-fn eval_rules(
+pub(crate) fn eval_rules(
     rules: &[ProcRule],
     fg: &str,
     states: &std::collections::HashMap<String, ProcApplied>,
@@ -403,6 +403,11 @@ impl Shell {
     ///   中間状態へ EEPROM 書き込みをしない = フラッシュ保護)。
     /// - 遷移は復帰→新規の順で、管理下のアプリ間を直接移っても新しい側が勝つ。
     pub fn proc_tick(&mut self, cx: &mut Context<Self>) {
+        // 常駐エージェントが動いていればルールはエージェントが適用する (二重適用しない)。
+        if crate::agent::is_running() {
+            self.proc_fg = None;
+            return;
+        }
         self.proc_drain(cx);
         if self.prefs.proc_rules.is_empty() {
             // ルールが全削除 = 管理下から外れた。適用中だった分は記録値で復帰する。

@@ -239,6 +239,11 @@ impl Shell {
         let running_set: std::collections::HashSet<String> =
             running.iter().map(|(e, _)| e.clone()).collect();
         let mut page = div().flex().flex_col().gap(px(14.)).w_full();
+        if crate::agent::is_running() {
+            page = page.child(ui::faint(
+                "常駐エージェントが実行中です — プロセス連動ルールはエージェントが適用します (この画面を閉じても切り替わります)。",
+            ));
+        }
 
         // ================= プロファイル =================
         let mut prof_body = ui::body();

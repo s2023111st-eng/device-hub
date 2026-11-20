@@ -34,7 +34,16 @@ if (-not (Test-Path $Source)) { throw "ビルド済みの exe がありません
 New-Item -ItemType Directory -Force $dir | Out-Null
 Stop-Agent
 Start-Sleep -Milliseconds 300
-Copy-Item $Source $exe -Force
+# 画面 (UI) を開いたままでも入れ替えられるよう、使用中の exe は改名してから置く
+# (実行中の exe は上書きできないが改名はできる)。
+$old = "$exe.old"
+Remove-Item $old -Force -ErrorAction SilentlyContinue
+if (Test-Path $exe) {
+    try { Copy-Item $Source $exe -Force -ErrorAction Stop }
+    catch { Rename-Item $exe $old -Force; Copy-Item $Source $exe -Force }
+} else {
+    Copy-Item $Source $exe -Force
+}
 
 Set-ItemProperty -Path $run -Name $name -Value "`"$exe`" --agent"
 
